@@ -35,13 +35,13 @@ function App() {
   if (!currentUserId || isPasswordRecovery) return <Login />;
 
   return (
-    <>
-      <div className={entering ? 'office-enter' : undefined} style={{ width: '100%', height: '100%' }}>
+    <div className="app-shell">
+      <div className={`app-office${entering ? ' office-enter' : ''}`}>
         <OfficeView />
       </div>
       <StatusBar />
       <ToastStack />
-    </>
+    </div>
   );
 }
 

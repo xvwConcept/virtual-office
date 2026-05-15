@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { RoomId } from '../components/Office/rooms';
 import type { Status, StatusValue, User } from '../types';
 
 export interface ToastEntry {
@@ -18,6 +19,8 @@ interface OfficeState {
   positions: Record<string, { col: number; row: number }>;
   pulsingUsers: Record<string, true>;
   toasts: ToastEntry[];
+  currentRoom: RoomId;
+  roomTransitioning: boolean;
 
   setCurrentUserId: (id: string | null) => void;
   setUsers: (users: User[]) => void;
@@ -32,6 +35,8 @@ interface OfficeState {
   setPulsing: (userId: string) => void;
   addToast: (toast: ToastEntry) => void;
   removeToast: (id: string) => void;
+  setCurrentRoom: (room: RoomId) => void;
+  setRoomTransitioning: (active: boolean) => void;
 }
 
 export const useOfficeStore = create<OfficeState>((set) => ({
@@ -43,6 +48,8 @@ export const useOfficeStore = create<OfficeState>((set) => ({
   positions: {},
   pulsingUsers: {},
   toasts: [],
+  currentRoom: 'office',
+  roomTransitioning: false,
 
   setCurrentUserId: (id) => set({ currentUserId: id }),
   setUsers: (users) =>
@@ -80,4 +87,6 @@ export const useOfficeStore = create<OfficeState>((set) => ({
     set((s) => ({ toasts: [...s.toasts.slice(-3), toast] })),
   removeToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  setCurrentRoom: (room) => set({ currentRoom: room }),
+  setRoomTransitioning: (active) => set({ roomTransitioning: active }),
 }));

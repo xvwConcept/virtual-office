@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useFitScale } from '../../hooks/useFitScale';
 import { useUsers } from '../../hooks/useUsers';
 import { useRealtimeStatus } from '../../hooks/useRealtimeStatus';
 import { usePositions } from '../../hooks/usePositions';
@@ -7,6 +8,7 @@ import { useOfficeStore } from '../../stores/officeStore';
 import type { StatusValue, User } from '../../types';
 import { TILE, GRID_COLS, GRID_ROWS, SPRITE_RES, C, STATUS_META, DESK_VISUALS, type DesignStatus } from './officeTokens';
 import { OFFICE_MAP } from './officeMap';
+import { getRoomMap, ROOM_META, isWarpTile } from './rooms';
 import {
   Floor, WallTop, WallSide, WallSolid, Window, Door, WallArt,
   DeskTop, DeskBottom, ChairBack, Avatar,
@@ -53,17 +55,22 @@ export function OfficeView() {
   const avatarPos     = useOfficeStore((s) => s.avatarPos);
   const setAvatarPos  = useOfficeStore((s) => s.setAvatarPos);
   const positions     = useOfficeStore((s) => s.positions);
-  const pulsingUsers  = useOfficeStore((s) => s.pulsingUsers);
+  const pulsingUsers      = useOfficeStore((s) => s.pulsingUsers);
+  const currentRoom       = useOfficeStore((s) => s.currentRoom);
+  const roomTransitioning = useOfficeStore((s) => s.roomTransitioning);
 
   const currentUser = currentUserId ? users[currentUserId] : null;
+  const inOffice = currentRoom === 'office';
+  const roomMap = getRoomMap(currentRoom);
+  const roomMeta = ROOM_META[currentRoom];
   const mySeat = currentUser ? (SEAT_BY_DESK[currentUser.desk_position] ?? null) : null;
 
   // Place avatar at own desk on first load (before broadcast exists).
   useEffect(() => {
-    if (mySeat && !avatarPos) {
+    if (inOffice && mySeat && !avatarPos) {
       setAvatarPos({ row: mySeat.row, col: mySeat.col });
     }
-  }, [mySeat?.row, mySeat?.col, avatarPos, setAvatarPos]);
+  }, [inOffice, mySeat?.row, mySeat?.col, avatarPos, setAvatarPos]);
 
   useAvatarMovement(mySeat?.row ?? null, mySeat?.col ?? null);
 
@@ -88,6 +95,15 @@ export function OfficeView() {
     }).map(({ col }) => col)
   ), [seatData]);
 
+  const W    = GRID_COLS * SPRITE_RES;
+  const H    = GRID_ROWS * SPRITE_RES;
+  const CSSW = GRID_COLS * TILE;
+  const CSSH = GRID_ROWS * TILE;
+  const FRAME_PAD = 24;
+  const frameW = CSSW + FRAME_PAD;
+  const frameH = CSSH + FRAME_PAD;
+  const { ref: viewportRef, scale } = useFitScale(frameW, frameH);
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: C.ink, fontFamily: 'ui-monospace, monospace' }}>
       Lade Büro …
@@ -99,18 +115,13 @@ export function OfficeView() {
     </div>
   );
 
-  const W    = GRID_COLS * SPRITE_RES;
-  const H    = GRID_ROWS * SPRITE_RES;
-  const CSSW = GRID_COLS * TILE;
-  const CSSH = GRID_ROWS * TILE;
-
   // Render static tiles (no avatars — rendered as a separate floating layer below)
   let artCount = 0;
   const tiles: React.ReactNode[] = [];
 
   for (let r = 0; r < GRID_ROWS; r++) {
     for (let c = 0; c < GRID_COLS; c++) {
-      const code = OFFICE_MAP[r]?.[c] ?? '.';
+      const code = roomMap[r]?.[c] ?? '.';
       const key  = `${r}-${c}`;
       const tx   = c * SPRITE_RES;
       const ty   = r * SPRITE_RES;
@@ -126,7 +137,7 @@ export function OfficeView() {
         case 'W': content = <Window />; break;
         case 'A': content = <WallArt variant={artCount++} />; break;
         case '/': content = <Door />; break;
-        case 'D': content = <DeskTop lampOn={lampOnCols.has(c)} />; break;
+        case 'D': content = <DeskTop lampOn={inOffice && lampOnCols.has(c)} />; break;
         case 'd': {
           const ds = seatBelow ? seatData[seatBelow.deskPosition]?.designStatus : null;
           content = <DeskBottom status={ds} />;
@@ -158,8 +169,11 @@ export function OfficeView() {
     }
   }
 
-  // Floating avatars for all users
-  const avatarEls: React.ReactNode[] = Object.values(users).map((user) => {
+  const visibleUsers = inOffice
+    ? Object.values(users)
+    : currentUser ? [currentUser] : [];
+
+  const avatarEls: React.ReactNode[] = visibleUsers.map((user) => {
     const visual = DESK_VISUALS[user.desk_position];
     if (!visual) return null;
 
@@ -203,17 +217,31 @@ export function OfficeView() {
   }));
 
   return (
-    <div style={{
-      width: '100%', height: '100%', background: C.bgDeep,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      overflow: 'auto',
-    }}>
-      <div style={{ position: 'relative', flexShrink: 0 }}>
-        <div style={{
-          padding: 12, background: C.bgFrame,
-          boxShadow: `inset 0 0 0 4px ${C.bgDeep}`,
-        }}>
-          <div style={{ position: 'relative', width: CSSW, height: CSSH }}>
+    <div ref={viewportRef} className="office-viewport">
+      <div
+        style={{
+          width: frameW * scale,
+          height: frameH * scale,
+          position: 'relative',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+            width: frameW,
+            height: frameH,
+          }}
+        >
+          <div
+            className={roomTransitioning ? 'room-warp' : undefined}
+            style={{
+              padding: 12, background: C.bgFrame,
+              boxShadow: `inset 0 0 0 4px ${C.bgDeep}`,
+            }}
+          >
+            <div style={{ position: 'relative', width: CSSW, height: CSSH }}>
             <svg
               viewBox={`0 0 ${W} ${H}`}
               width={CSSW}
@@ -229,37 +257,73 @@ export function OfficeView() {
 
               {tiles}
 
-              {/* Break-zone floor tint */}
-              <rect x={10 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
-                fill={C.statusBreak} fillOpacity={0.08} />
-              <rect x={15 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
-                fill={C.statusBreak} fillOpacity={0.08} />
+              {inOffice && (
+                <>
+                  <rect x={10 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
+                    fill={C.statusBreak} fillOpacity={0.08} />
+                  <rect x={15 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
+                    fill={C.statusBreak} fillOpacity={0.08} />
+                </>
+              )}
+
+              {!inOffice && Array.from({ length: GRID_ROWS }, (_, r) =>
+                Array.from({ length: GRID_COLS }, (_, c) =>
+                  isWarpTile(currentRoom, r, c) ? (
+                    <rect
+                      key={`warp-${r}-${c}`}
+                      x={c * SPRITE_RES}
+                      y={r * SPRITE_RES}
+                      width={SPRITE_RES}
+                      height={SPRITE_RES}
+                      fill={C.inkSoft}
+                      fillOpacity={0.12}
+                    />
+                  ) : null
+                )
+              )}
 
               {avatarEls}
 
               <rect x="0" y="0" width={W} height={H} fill="url(#vig)" />
             </svg>
 
-            {/* Break-zone label */}
-            <div style={{
-              position: 'absolute',
-              left: 12 * TILE + TILE,
-              top: 11 * TILE + TILE * 0.6,
-              transform: 'translateX(-50%)',
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '2px 7px',
-              background: C.bgDeep + 'ee',
-              border: `1px solid ${C.statusBreak}44`,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: 9, letterSpacing: 1,
-              color: C.statusBreak,
-              whiteSpace: 'nowrap', pointerEvents: 'none',
-            }}>
-              ☕ PAUSE ZONE
-            </div>
+            {inOffice && (
+              <div style={{
+                position: 'absolute',
+                left: 12 * TILE + TILE,
+                top: 11 * TILE + TILE * 0.6,
+                transform: 'translateX(-50%)',
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '2px 7px',
+                background: C.bgDeep + 'ee',
+                border: `1px solid ${C.statusBreak}44`,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 9, letterSpacing: 1,
+                color: C.statusBreak,
+                whiteSpace: 'nowrap', pointerEvents: 'none',
+              }}>
+                ☕ PAUSE ZONE
+              </div>
+            )}
 
-            {/* Name + status pills for all users with positions */}
-            {Object.values(users).map((user) => {
+            {!inOffice && (
+              <div style={{
+                position: 'absolute',
+                left: 1 * TILE,
+                bottom: 2 * TILE,
+                padding: '2px 7px',
+                background: C.bgDeep + 'ee',
+                border: `1px solid ${C.inkSoft}55`,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 9, letterSpacing: 1,
+                color: C.inkSoft,
+                pointerEvents: 'none',
+              }}>
+                ← BÜRO
+              </div>
+            )}
+
+            {visibleUsers.map((user) => {
               const rawStatus = statuses[user.id]?.status ?? 'offline';
               const designStatus = toDesign[rawStatus as StatusValue] ?? 'away';
               const col_ = STATUS_META[designStatus].color;
@@ -311,10 +375,11 @@ export function OfficeView() {
               border: `1px solid ${C.wallLight}`,
               boxShadow: `0 3px 0 ${C.bgDeep}`,
             }}>
-              VIRTUAL OFFICE · 20×15 · {SEATS.length} PLÄTZE
+              {roomMeta.title} · {roomMeta.subtitle}
+              {inOffice ? ` · ${SEATS.length} PLÄTZE` : ''}
             </div>
 
-            {/* Top-right status summary */}
+            {inOffice && (
             <div style={{
               position: 'absolute', right: 12, top: 12,
               display: 'flex', gap: 6,
@@ -337,7 +402,9 @@ export function OfficeView() {
                 </div>
               ))}
             </div>
+            )}
           </div>
+        </div>
         </div>
       </div>
     </div>

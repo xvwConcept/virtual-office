@@ -17,8 +17,9 @@ export function StatusBar() {
   if (!currentUserId) return null;
 
   return (
-    <div style={{
-      position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+    <div
+      className="status-bar"
+      style={{
       display: 'flex', gap: 4,
       background: C.bgFrame,
       border: `1px solid ${C.wallLight}`,

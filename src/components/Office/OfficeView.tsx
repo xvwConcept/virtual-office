@@ -67,23 +67,7 @@ export function OfficeView() {
 
   useAvatarMovement(mySeat?.row ?? null, mySeat?.col ?? null);
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: C.ink, fontFamily: 'ui-monospace, monospace' }}>
-      Lade Büro …
-    </div>
-  );
-  if (error) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: '#ef476f', fontFamily: 'ui-monospace, monospace' }}>
-      Fehler: {error}
-    </div>
-  );
-
-  const W    = GRID_COLS * SPRITE_RES;
-  const H    = GRID_ROWS * SPRITE_RES;
-  const CSSW = GRID_COLS * TILE;
-  const CSSH = GRID_ROWS * TILE;
-
-  // Memoize per-seat design status — only recomputes when users/statuses change
+  // Memoize per-seat design status — must run before any early return (Rules of Hooks)
   const seatData = useMemo(() => {
     const userByDesk: Record<number, User> = {};
     for (const u of Object.values(users)) userByDesk[u.desk_position] = u;
@@ -103,6 +87,22 @@ export function OfficeView() {
       return ds === 'active' || ds === 'dnd';
     }).map(({ col }) => col)
   ), [seatData]);
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: C.ink, fontFamily: 'ui-monospace, monospace' }}>
+      Lade Büro …
+    </div>
+  );
+  if (error) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: '#ef476f', fontFamily: 'ui-monospace, monospace' }}>
+      Fehler: {error}
+    </div>
+  );
+
+  const W    = GRID_COLS * SPRITE_RES;
+  const H    = GRID_ROWS * SPRITE_RES;
+  const CSSW = GRID_COLS * TILE;
+  const CSSH = GRID_ROWS * TILE;
 
   // Render static tiles (no avatars — rendered as a separate floating layer below)
   let artCount = 0;

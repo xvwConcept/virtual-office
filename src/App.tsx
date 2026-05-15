@@ -7,7 +7,7 @@ import { Login } from './components/UI/Login';
 import { ToastStack } from './components/UI/ToastStack';
 
 function App() {
-  const { ready } = useAuth();
+  const { ready, isPasswordRecovery } = useAuth();
   const currentUserId = useOfficeStore((s) => s.currentUserId);
   const prevUserId = useRef<string | null>(null);
   const [entering, setEntering] = useState(false);
@@ -15,7 +15,7 @@ function App() {
   useEffect(() => {
     if (currentUserId && !prevUserId.current) {
       setEntering(true);
-      const t = setTimeout(() => setEntering(false), 500);
+      const t = setTimeout(() => setEntering(false), 900);
       prevUserId.current = currentUserId;
       return () => clearTimeout(t);
     }
@@ -32,7 +32,7 @@ function App() {
     </div>
   );
 
-  if (!currentUserId) return <Login />;
+  if (!currentUserId || isPasswordRecovery) return <Login />;
 
   return (
     <>

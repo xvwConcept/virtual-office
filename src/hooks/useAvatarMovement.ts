@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useOfficeStore } from '../stores/officeStore';
 import { useUpdateStatus } from './useUpdateStatus';
+import { useBroadcastPosition } from './useBroadcastPosition';
 import { OFFICE_MAP, WALKABLE_TILES, BREAK_ZONE_TILES } from '../components/Office/officeMap';
 import { GRID_COLS, GRID_ROWS } from '../components/Office/officeTokens';
 
@@ -10,9 +11,10 @@ export function useAvatarMovement(
   mySeatRow: number | null,
   mySeatCol: number | null,
 ) {
-  const setAvatarPos = useOfficeStore((s) => s.setAvatarPos);
-  const currentUserId = useOfficeStore((s) => s.currentUserId);
-  const updateStatus = useUpdateStatus();
+  const setAvatarPos      = useOfficeStore((s) => s.setAvatarPos);
+  const currentUserId     = useOfficeStore((s) => s.currentUserId);
+  const updateStatus      = useUpdateStatus();
+  const broadcastPosition = useBroadcastPosition();
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -36,18 +38,17 @@ export function useAvatarMovement(
       if (!WALKABLE_TILES.has(tile)) return;
 
       setAvatarPos({ row: nr, col: nc });
+      broadcastPosition(nc, nr);
 
       const currentStatus = statuses[currentUserId]?.status;
-
       if (BREAK_ZONE_TILES.has(tile)) {
         if (currentStatus !== 'pause') updateStatus('pause');
       } else if (tile === 'C' && nr === mySeatRow && nc === mySeatCol) {
-        // Returned to own desk — restore online status
         if (currentStatus === 'pause') updateStatus('online');
       }
     };
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [currentUserId, setAvatarPos, updateStatus, mySeatRow, mySeatCol]);
+  }, [currentUserId, setAvatarPos, updateStatus, broadcastPosition, mySeatRow, mySeatCol]);
 }

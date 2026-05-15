@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useUsers } from '../../hooks/useUsers';
 import { useRealtimeStatus } from '../../hooks/useRealtimeStatus';
+import { usePositions } from '../../hooks/usePositions';
 import { useAvatarMovement } from '../../hooks/useAvatarMovement';
 import { useOfficeStore } from '../../stores/officeStore';
 import type { StatusValue } from '../../types';
@@ -13,7 +14,6 @@ import {
   KitchenCounter, KitchenAppliance, CouchLeft, CouchRight, Rug,
 } from './sprites';
 
-// Map our status values to the design's status model
 const toDesign: Record<StatusValue, DesignStatus> = {
   online:  'active',
   pause:   'break',
@@ -24,32 +24,40 @@ const toDesign: Record<StatusValue, DesignStatus> = {
 const floorVariant = (r: number, c: number): 'A' | 'B' =>
   (r + c) % 2 === 0 ? 'A' : 'B';
 
-export function OfficeView() {
-  const { loading, error } = useUsers();
-  useRealtimeStatus();
-
-  const users          = useOfficeStore((s) => s.users);
-  const statuses       = useOfficeStore((s) => s.statuses);
-  const currentUserId  = useOfficeStore((s) => s.currentUserId);
-  const avatarPos      = useOfficeStore((s) => s.avatarPos);
-  const setAvatarPos   = useOfficeStore((s) => s.setAvatarPos);
-
-  // Seat positions are derived from a constant map — safe to compute before early returns.
-  let seatIdx = 0;
-  const seats: { row: number; col: number; deskPosition: number }[] = [];
+// Compute seat positions once (OFFICE_MAP is a module constant).
+const SEATS: { row: number; col: number; deskPosition: number }[] = [];
+(() => {
+  let idx = 0;
   for (let r = 0; r < GRID_ROWS; r++) {
     for (let c = 0; c < GRID_COLS; c++) {
       if (OFFICE_MAP[r]?.[c] === 'C') {
-        seats.push({ row: r, col: c, deskPosition: seatIdx + 1 });
-        seatIdx++;
+        SEATS.push({ row: r, col: c, deskPosition: idx + 1 });
+        idx++;
       }
     }
   }
+})();
+
+// Lookup: deskPosition → seat
+const SEAT_BY_DESK = Object.fromEntries(SEATS.map((s) => [s.deskPosition, s]));
+
+export function OfficeView() {
+  const { loading, error } = useUsers();
+  useRealtimeStatus();
+  usePositions();
+
+  const users         = useOfficeStore((s) => s.users);
+  const statuses      = useOfficeStore((s) => s.statuses);
+  const currentUserId = useOfficeStore((s) => s.currentUserId);
+  const avatarPos     = useOfficeStore((s) => s.avatarPos);
+  const setAvatarPos  = useOfficeStore((s) => s.setAvatarPos);
+  const positions     = useOfficeStore((s) => s.positions);
+  const pulsingUsers  = useOfficeStore((s) => s.pulsingUsers);
 
   const currentUser = currentUserId ? users[currentUserId] : null;
-  const mySeat = seats.find((s) => s.deskPosition === currentUser?.desk_position) ?? null;
+  const mySeat = currentUser ? (SEAT_BY_DESK[currentUser.desk_position] ?? null) : null;
 
-  // All hooks must run before any early return (Rules of Hooks).
+  // Place avatar at own desk on first load (before broadcast exists).
   useEffect(() => {
     if (mySeat && !avatarPos) {
       setAvatarPos({ row: mySeat.row, col: mySeat.col });
@@ -74,9 +82,9 @@ export function OfficeView() {
   const CSSW = GRID_COLS * TILE;
   const CSSH = GRID_ROWS * TILE;
 
-  // Build lookup: deskPosition → { name, designStatus }
+  // Seat data lookup
   const seatData = Object.fromEntries(
-    seats.map(({ deskPosition }) => {
+    SEATS.map(({ deskPosition }) => {
       const user = Object.values(users).find((u) => u.desk_position === deskPosition);
       const rawStatus = user ? statuses[user.id]?.status ?? 'offline' : 'offline';
       const designStatus = toDesign[rawStatus as StatusValue] ?? 'away';
@@ -84,17 +92,14 @@ export function OfficeView() {
     })
   );
 
-  // Which desk columns have active/dnd (lamp glow)
   const lampOnCols = new Set(
-    seats
-      .filter(({ deskPosition }) => {
-        const ds = seatData[deskPosition]?.designStatus;
-        return ds === 'active' || ds === 'dnd';
-      })
-      .map(({ col }) => col)
+    SEATS.filter(({ deskPosition }) => {
+      const ds = seatData[deskPosition]?.designStatus;
+      return ds === 'active' || ds === 'dnd';
+    }).map(({ col }) => col)
   );
 
-  // Render tiles
+  // Render static tiles (no avatars — rendered as a separate floating layer below)
   let artCount = 0;
   const tiles: React.ReactNode[] = [];
 
@@ -105,9 +110,8 @@ export function OfficeView() {
       const tx   = c * SPRITE_RES;
       const ty   = r * SPRITE_RES;
 
-      // Find which seat this tile belongs to
-      const seat = seats.find((s) => s.row === r && s.col === c);
-      const seatBelow = seats.find((s) => s.col === c && s.row === r + 1);
+      const seat      = SEATS.find((s) => s.row === r && s.col === c);
+      const seatBelow = SEATS.find((s) => s.col === c && s.row === r + 1);
 
       let content: React.ReactNode = null;
       switch (code) {
@@ -124,21 +128,13 @@ export function OfficeView() {
           break;
         }
         case 'C': {
-          if (seat) {
-            const { designStatus } = seatData[seat.deskPosition];
-            const visual = DESK_VISUALS[seat.deskPosition];
-            const isMe = seat.deskPosition === currentUser?.desk_position;
-            content = (
-              <g>
-                <Floor variant={floorVariant(r, c)} />
-                <ChairBack status={designStatus} />
-                {/* Current user's avatar is rendered as a free-moving element */}
-                {visual && !isMe && <Avatar visual={visual} status={designStatus} />}
-              </g>
-            );
-          } else {
-            content = <Floor variant={floorVariant(r, c)} />;
-          }
+          const ds = seat ? seatData[seat.deskPosition]?.designStatus : null;
+          content = (
+            <g>
+              <Floor variant={floorVariant(r, c)} />
+              <ChairBack status={ds} />
+            </g>
+          );
           break;
         }
         case 'P': content = <Plant />; break;
@@ -153,13 +149,47 @@ export function OfficeView() {
         default:  content = <Floor variant={floorVariant(r, c)} />; break;
       }
 
-      tiles.push(
-        <g key={key} transform={`translate(${tx} ${ty})`}>{content}</g>
-      );
+      tiles.push(<g key={key} transform={`translate(${tx} ${ty})`}>{content}</g>);
     }
   }
 
-  // Status summary (top-right overlay)
+  // Floating avatars for all users
+  const avatarEls: React.ReactNode[] = Object.values(users).map((user) => {
+    const visual = DESK_VISUALS[user.desk_position];
+    if (!visual) return null;
+
+    const rawStatus = statuses[user.id]?.status ?? 'offline';
+    const designStatus = toDesign[rawStatus as StatusValue] ?? 'away';
+    const pulsing = !!pulsingUsers[user.id];
+
+    let pos: { col: number; row: number };
+    if (user.id === currentUserId && avatarPos) {
+      pos = { col: avatarPos.col, row: avatarPos.row };
+    } else {
+      pos = positions[user.id] ?? (
+        SEAT_BY_DESK[user.desk_position]
+          ? { col: SEAT_BY_DESK[user.desk_position].col, row: SEAT_BY_DESK[user.desk_position].row }
+          : null
+      );
+    }
+
+    if (!pos) return null;
+
+    return (
+      <g
+        key={user.id}
+        transform={`translate(${pos.col * SPRITE_RES} ${pos.row * SPRITE_RES})`}
+        style={{
+          transition: user.id === currentUserId ? 'transform 70ms linear' : 'transform 220ms linear',
+        }}
+        className={pulsing ? 'avatar-pulse' : undefined}
+      >
+        <Avatar visual={visual} status={designStatus} />
+      </g>
+    );
+  });
+
+  // Status summary
   const designStatuses = Object.values(seatData).map((d) => d.designStatus);
   const summary = (['active', 'break', 'dnd', 'away'] as DesignStatus[]).map((k) => ({
     k,
@@ -169,23 +199,16 @@ export function OfficeView() {
 
   return (
     <div style={{
-      width: '100%',
-      height: '100%',
-      background: C.bgDeep,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      width: '100%', height: '100%', background: C.bgDeep,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       overflow: 'auto',
     }}>
       <div style={{ position: 'relative', flexShrink: 0 }}>
-        {/* Frame */}
         <div style={{
-          padding: 12,
-          background: C.bgFrame,
+          padding: 12, background: C.bgFrame,
           boxShadow: `inset 0 0 0 4px ${C.bgDeep}`,
         }}>
           <div style={{ position: 'relative', width: CSSW, height: CSSH }}>
-            {/* SVG pixel map */}
             <svg
               viewBox={`0 0 ${W} ${H}`}
               width={CSSW}
@@ -198,6 +221,7 @@ export function OfficeView() {
                   <stop offset="100%" stopColor="#000" stopOpacity="0.35" />
                 </radialGradient>
               </defs>
+
               {tiles}
 
               {/* Break-zone floor tint */}
@@ -206,21 +230,7 @@ export function OfficeView() {
               <rect x={15 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
                 fill={C.statusBreak} fillOpacity={0.08} />
 
-              {/* Current user's free-moving avatar */}
-              {currentUser && avatarPos && (() => {
-                const myVisual = DESK_VISUALS[currentUser.desk_position];
-                const myRaw = statuses[currentUserId!]?.status ?? 'offline';
-                const myDesign = toDesign[myRaw as StatusValue] ?? 'away';
-                if (!myVisual) return null;
-                return (
-                  <g
-                    transform={`translate(${avatarPos.col * SPRITE_RES} ${avatarPos.row * SPRITE_RES})`}
-                    style={{ transition: 'transform 70ms linear' }}
-                  >
-                    <Avatar visual={myVisual} status={myDesign} />
-                  </g>
-                );
-              })()}
+              {avatarEls}
 
               <rect x="0" y="0" width={W} height={H} fill="url(#vig)" />
             </svg>
@@ -231,50 +241,56 @@ export function OfficeView() {
               left: 12 * TILE + TILE,
               top: 11 * TILE + TILE * 0.6,
               transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
+              display: 'flex', alignItems: 'center', gap: 4,
               padding: '2px 7px',
               background: C.bgDeep + 'ee',
               border: `1px solid ${C.statusBreak}44`,
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: 9,
-              letterSpacing: 1,
+              fontSize: 9, letterSpacing: 1,
               color: C.statusBreak,
-              whiteSpace: 'nowrap',
-              pointerEvents: 'none',
+              whiteSpace: 'nowrap', pointerEvents: 'none',
             }}>
               ☕ PAUSE ZONE
             </div>
 
-            {/* Name + status pills */}
-            {seats.map(({ row, col, deskPosition }) => {
-              const { user, designStatus } = seatData[deskPosition];
-              const name = user?.name ?? `Desk ${deskPosition}`;
+            {/* Name + status pills for all users with positions */}
+            {Object.values(users).map((user) => {
+              const rawStatus = statuses[user.id]?.status ?? 'offline';
+              const designStatus = toDesign[rawStatus as StatusValue] ?? 'away';
               const col_ = STATUS_META[designStatus].color;
-              const sx = col * TILE + TILE / 2;
-              const sy = (row + 1) * TILE + 4;
+              const name = user.name ?? `Desk ${user.desk_position}`;
+
+              let pos: { col: number; row: number };
+              if (user.id === currentUserId && avatarPos) {
+                pos = { col: avatarPos.col, row: avatarPos.row };
+              } else {
+                pos = positions[user.id] ?? (
+                  SEAT_BY_DESK[user.desk_position]
+                    ? { col: SEAT_BY_DESK[user.desk_position].col, row: SEAT_BY_DESK[user.desk_position].row }
+                    : null
+                );
+              }
+              if (!pos) return null;
+
+              const sx = pos.col * TILE + TILE / 2;
+              const sy = (pos.row + 1) * TILE + 4;
+
               return (
-                <div key={deskPosition} style={{
-                  position: 'absolute',
-                  left: sx,
-                  top: sy,
+                <div key={user.id} style={{
+                  position: 'absolute', left: sx, top: sy,
                   transform: 'translateX(-50%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
+                  display: 'flex', alignItems: 'center', gap: 4,
                   padding: '2px 6px 2px 4px',
                   background: C.bgDeep + 'ee',
                   border: `1px solid ${C.wallLight}`,
                   boxShadow: `0 2px 0 ${C.bgDeep}`,
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontSize: 10,
-                  lineHeight: 1.2,
-                  color: C.ink,
-                  whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
+                  fontSize: 10, lineHeight: 1.2, color: C.ink,
+                  whiteSpace: 'nowrap', pointerEvents: 'none',
+                  transition: 'left 220ms linear, top 220ms linear',
                 }}>
-                  <span style={{ width: 6, height: 6, background: col_, boxShadow: `0 0 6px ${col_}`, display: 'block' }} />
+                  <span style={{ width: 6, height: 6, background: col_, boxShadow: `0 0 6px ${col_}`, display: 'block',
+                    transition: 'background 0.3s, box-shadow 0.3s' }} />
                   <span style={{ letterSpacing: 0.5 }}>{name}</span>
                 </div>
               );
@@ -285,13 +301,12 @@ export function OfficeView() {
               position: 'absolute', left: 12, top: 12,
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               fontSize: 11, letterSpacing: 2,
-              background: C.bgDeep + 'ee',
-              color: C.ink,
+              background: C.bgDeep + 'ee', color: C.ink,
               padding: '6px 10px',
               border: `1px solid ${C.wallLight}`,
               boxShadow: `0 3px 0 ${C.bgDeep}`,
             }}>
-              VIRTUAL OFFICE · 20×15 · {seats.length} PLÄTZE
+              VIRTUAL OFFICE · 20×15 · {SEATS.length} PLÄTZE
             </div>
 
             {/* Top-right status summary */}
@@ -310,7 +325,8 @@ export function OfficeView() {
                   boxShadow: `0 3px 0 ${C.bgDeep}`,
                   color: C.ink,
                 }}>
-                  <span style={{ width: 8, height: 8, background: x.color, boxShadow: `0 0 8px ${x.color}`, display: 'block' }} />
+                  <span style={{ width: 8, height: 8, background: x.color, boxShadow: `0 0 8px ${x.color}`, display: 'block',
+                    transition: 'background 0.3s, box-shadow 0.3s' }} />
                   <span>{x.n}</span>
                   <span style={{ color: C.inkDim, fontSize: 9 }}>{x.label.toUpperCase()}</span>
                 </div>

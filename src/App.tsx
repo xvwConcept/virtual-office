@@ -1,20 +1,46 @@
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useOfficeStore } from './stores/officeStore';
 import { OfficeView } from './components/Office/OfficeView';
 import { StatusBar } from './components/StatusBar/StatusBar';
 import { Login } from './components/UI/Login';
+import { ToastStack } from './components/UI/ToastStack';
 
 function App() {
   const { ready } = useAuth();
   const currentUserId = useOfficeStore((s) => s.currentUserId);
+  const prevUserId = useRef<string | null>(null);
+  const [entering, setEntering] = useState(false);
 
-  if (!ready) return <div className="p-8">Initialisiere …</div>;
+  useEffect(() => {
+    if (currentUserId && !prevUserId.current) {
+      setEntering(true);
+      const t = setTimeout(() => setEntering(false), 500);
+      prevUserId.current = currentUserId;
+      return () => clearTimeout(t);
+    }
+    prevUserId.current = currentUserId;
+  }, [currentUserId]);
+
+  if (!ready) return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: '100%', background: '#14121a',
+      fontFamily: 'ui-monospace, monospace', color: '#f4ecd8', fontSize: 12,
+    }}>
+      …
+    </div>
+  );
+
   if (!currentUserId) return <Login />;
 
   return (
     <>
-      <OfficeView />
+      <div className={entering ? 'office-enter' : undefined} style={{ width: '100%', height: '100%' }}>
+        <OfficeView />
+      </div>
       <StatusBar />
+      <ToastStack />
     </>
   );
 }

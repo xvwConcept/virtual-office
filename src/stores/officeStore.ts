@@ -6,6 +6,7 @@ interface OfficeState {
   users: Record<string, User>;
   statuses: Record<string, Status>;
   selectedDesk: number | null;
+  avatarPos: { row: number; col: number } | null;
 
   setCurrentUserId: (id: string | null) => void;
   setUsers: (users: User[]) => void;
@@ -13,6 +14,7 @@ interface OfficeState {
   upsertStatus: (status: Status) => void;
   upsertUser: (user: User) => void;
   selectDesk: (deskPosition: number | null) => void;
+  setAvatarPos: (pos: { row: number; col: number }) => void;
 }
 
 export const useOfficeStore = create<OfficeState>((set) => ({
@@ -20,6 +22,7 @@ export const useOfficeStore = create<OfficeState>((set) => ({
   users: {},
   statuses: {},
   selectedDesk: null,
+  avatarPos: null,
 
   setCurrentUserId: (id) => set({ currentUserId: id }),
   setUsers: (users) =>
@@ -33,4 +36,5 @@ export const useOfficeStore = create<OfficeState>((set) => ({
   upsertUser: (user) =>
     set((s) => ({ users: { ...s.users, [user.id]: user } })),
   selectDesk: (deskPosition) => set({ selectedDesk: deskPosition }),
+  setAvatarPos: (pos) => set({ avatarPos: pos }),
 }));

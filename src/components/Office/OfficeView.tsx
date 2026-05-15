@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useUsers } from '../../hooks/useUsers';
 import { useRealtimeStatus } from '../../hooks/useRealtimeStatus';
+import { useAvatarMovement } from '../../hooks/useAvatarMovement';
 import { useOfficeStore } from '../../stores/officeStore';
 import type { StatusValue } from '../../types';
 import { TILE, GRID_COLS, GRID_ROWS, SPRITE_RES, C, STATUS_META, DESK_VISUALS, type DesignStatus } from './officeTokens';
@@ -26,8 +28,11 @@ export function OfficeView() {
   const { loading, error } = useUsers();
   useRealtimeStatus();
 
-  const users    = useOfficeStore((s) => s.users);
-  const statuses = useOfficeStore((s) => s.statuses);
+  const users          = useOfficeStore((s) => s.users);
+  const statuses       = useOfficeStore((s) => s.statuses);
+  const currentUserId  = useOfficeStore((s) => s.currentUserId);
+  const avatarPos      = useOfficeStore((s) => s.avatarPos);
+  const setAvatarPos   = useOfficeStore((s) => s.setAvatarPos);
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: C.ink, fontFamily: 'ui-monospace, monospace' }}>
@@ -56,6 +61,18 @@ export function OfficeView() {
       }
     }
   }
+
+  const currentUser = currentUserId ? users[currentUserId] : null;
+  const mySeat = seats.find((s) => s.deskPosition === currentUser?.desk_position) ?? null;
+
+  // Place avatar at own desk on first load
+  useEffect(() => {
+    if (mySeat && !avatarPos) {
+      setAvatarPos({ row: mySeat.row, col: mySeat.col });
+    }
+  }, [mySeat?.row, mySeat?.col, avatarPos, setAvatarPos]);
+
+  useAvatarMovement(mySeat?.row ?? null, mySeat?.col ?? null);
 
   // Build lookup: deskPosition → { name, designStatus }
   const seatData = Object.fromEntries(
@@ -110,11 +127,13 @@ export function OfficeView() {
           if (seat) {
             const { designStatus } = seatData[seat.deskPosition];
             const visual = DESK_VISUALS[seat.deskPosition];
+            const isMe = seat.deskPosition === currentUser?.desk_position;
             content = (
               <g>
                 <Floor variant={floorVariant(r, c)} />
                 <ChairBack status={designStatus} />
-                {visual && <Avatar visual={visual} status={designStatus} />}
+                {/* Current user's avatar is rendered as a free-moving element */}
+                {visual && !isMe && <Avatar visual={visual} status={designStatus} />}
               </g>
             );
           } else {
@@ -180,8 +199,53 @@ export function OfficeView() {
                 </radialGradient>
               </defs>
               {tiles}
+
+              {/* Break-zone floor tint */}
+              <rect x={10 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
+                fill={C.statusBreak} fillOpacity={0.08} />
+              <rect x={15 * SPRITE_RES} y={12 * SPRITE_RES} width={4 * SPRITE_RES} height={2 * SPRITE_RES}
+                fill={C.statusBreak} fillOpacity={0.08} />
+
+              {/* Current user's free-moving avatar */}
+              {currentUser && avatarPos && (() => {
+                const myVisual = DESK_VISUALS[currentUser.desk_position];
+                const myRaw = statuses[currentUserId!]?.status ?? 'offline';
+                const myDesign = toDesign[myRaw as StatusValue] ?? 'away';
+                if (!myVisual) return null;
+                return (
+                  <g
+                    transform={`translate(${avatarPos.col * SPRITE_RES} ${avatarPos.row * SPRITE_RES})`}
+                    style={{ transition: 'transform 70ms linear' }}
+                  >
+                    <Avatar visual={myVisual} status={myDesign} />
+                  </g>
+                );
+              })()}
+
               <rect x="0" y="0" width={W} height={H} fill="url(#vig)" />
             </svg>
+
+            {/* Break-zone label */}
+            <div style={{
+              position: 'absolute',
+              left: 12 * TILE + TILE,
+              top: 11 * TILE + TILE * 0.6,
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 7px',
+              background: C.bgDeep + 'ee',
+              border: `1px solid ${C.statusBreak}44`,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: 9,
+              letterSpacing: 1,
+              color: C.statusBreak,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+            }}>
+              ☕ PAUSE ZONE
+            </div>
 
             {/* Name + status pills */}
             {seats.map(({ row, col, deskPosition }) => {

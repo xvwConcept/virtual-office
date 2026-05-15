@@ -1,6 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { C } from '../Office/officeTokens';
+
+type View = 'login' | 'forgot' | 'reset';
+
+const inputStyle: React.CSSProperties = {
+  background: C.bgDeep,
+  border: `1px solid ${C.wallLight}`,
+  color: C.ink,
+  padding: '8px 12px',
+  fontSize: 12,
+  fontFamily: 'inherit',
+  outline: 'none',
+};
+
+const linkButtonStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  fontFamily: 'inherit',
+  fontSize: 10,
+  letterSpacing: 0.5,
+  color: C.inkDim,
+  cursor: 'pointer',
+  textDecoration: 'underline',
+  textUnderlineOffset: 3,
+};
 
 // Minimal pixel-art dot grid for the background
 function DotGrid() {
@@ -47,13 +72,33 @@ function StatusRow() {
 }
 
 export function Login() {
-  const { signInWithPassword } = useAuth();
-  const [email, setEmail]     = useState('');
+  const {
+    signInWithPassword,
+    resetPasswordForEmail,
+    updatePassword,
+    isPasswordRecovery,
+  } = useAuth();
+
+  const [view, setView] = useState<View>('login');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]     = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (isPasswordRecovery) setView('reset');
+  }, [isPasswordRecovery]);
+
+  const switchView = (next: View) => {
+    setView(next);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -65,6 +110,61 @@ export function Login() {
       setLoading(false);
     }
   };
+
+  const onForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    try {
+      await resetPasswordForEmail(email);
+      setSuccess('E-Mail gesendet. Prüfe dein Postfach und folge dem Link.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'E-Mail konnte nicht gesendet werden');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (newPassword.length < 8) {
+      setError('Passwort muss mindestens 8 Zeichen haben');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwörter stimmen nicht überein');
+      return;
+    }
+    setLoading(true);
+    try {
+      await updatePassword(newPassword);
+      setSuccess('Passwort aktualisiert. Du kannst dich jetzt anmelden.');
+      setNewPassword('');
+      setConfirmPassword('');
+      switchView('login');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Passwort konnte nicht gesetzt werden');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cardTitle =
+    view === 'login' ? 'ANMELDEN' :
+    view === 'forgot' ? 'PASSWORT VERGESSEN' :
+    'NEUES PASSWORT';
+
+  const submitLabel =
+    view === 'login' ? (loading ? 'BITTE WARTEN …' : 'EINLOGGEN →') :
+    view === 'forgot' ? (loading ? 'BITTE WARTEN …' : 'LINK SENDEN →') :
+    (loading ? 'BITTE WARTEN …' : 'PASSWORT SPEICHERN →');
+
+  const onSubmit =
+    view === 'login' ? onLogin :
+    view === 'forgot' ? onForgot :
+    onReset;
 
   return (
     <div style={{
@@ -100,32 +200,71 @@ export function Login() {
           padding: '20px 24px 24px',
         }}>
           <div style={{ fontSize: 9, letterSpacing: 3, color: C.inkDim, marginBottom: 4 }}>
-            ANMELDEN
+            {cardTitle}
           </div>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="email@ppw.de"
-            style={{
-              background: C.bgDeep, border: `1px solid ${C.wallLight}`,
-              color: C.ink, padding: '8px 12px', fontSize: 12,
-              fontFamily: 'inherit', outline: 'none',
-            }}
-          />
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Passwort"
-            style={{
-              background: C.bgDeep, border: `1px solid ${C.wallLight}`,
-              color: C.ink, padding: '8px 12px', fontSize: 12,
-              fontFamily: 'inherit', outline: 'none',
-            }}
-          />
+
+          {(view === 'login' || view === 'forgot') && (
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@ppw.de"
+              style={inputStyle}
+            />
+          )}
+
+          {view === 'login' && (
+            <>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Passwort"
+                style={inputStyle}
+              />
+              <button
+                type="button"
+                onClick={() => switchView('forgot')}
+                style={{ ...linkButtonStyle, alignSelf: 'flex-end', marginTop: -4 }}
+              >
+                Passwort vergessen?
+              </button>
+            </>
+          )}
+
+          {view === 'forgot' && (
+            <p style={{ margin: 0, fontSize: 10, lineHeight: 1.5, color: C.inkDim, letterSpacing: 0.3 }}>
+              Wir senden dir einen Link per E-Mail, mit dem du ein neues Passwort setzen kannst.
+            </p>
+          )}
+
+          {view === 'reset' && (
+            <>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Neues Passwort"
+                style={inputStyle}
+                autoComplete="new-password"
+              />
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Passwort bestätigen"
+                style={inputStyle}
+                autoComplete="new-password"
+              />
+            </>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -138,10 +277,24 @@ export function Login() {
               transition: 'background 0.2s',
             }}
           >
-            {loading ? 'BITTE WARTEN …' : 'EINLOGGEN →'}
+            {submitLabel}
           </button>
+
+          {view !== 'login' && (
+            <button
+              type="button"
+              onClick={() => switchView('login')}
+              style={{ ...linkButtonStyle, alignSelf: 'center', marginTop: 2 }}
+            >
+              ← Zurück zur Anmeldung
+            </button>
+          )}
+
           {error && (
             <div style={{ fontSize: 11, color: C.statusDND, letterSpacing: 0.5 }}>{error}</div>
+          )}
+          {success && (
+            <div style={{ fontSize: 11, color: C.statusActive, letterSpacing: 0.5 }}>{success}</div>
           )}
         </form>
       </div>

@@ -7,6 +7,10 @@ export const WALKABLE_TILES = new Set(['.', '/', 'C', 'c', 'R', 'L', 'l']);
 // Entering any of these tiles auto-sets the user's status to "pause".
 export const BREAK_ZONE_TILES = new Set(['R', 'L', 'l']);
 
+// Exit door + corridor under pause zone — sets status to offline (Abwesend).
+export const DOOR_TILE = '/';
+export const DOOR_ZONE_KEYS = new Set(['12-13', '13-13', '14-11']);
+
 export const OFFICE_MAP: string[] = [
   '====================', //  0
   '|.WW.A..WW.A..WW.A.|', //  1

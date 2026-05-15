@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useOfficeStore } from '../stores/officeStore';
 import { useUpdateStatus } from './useUpdateStatus';
 import { useBroadcastPosition } from './useBroadcastPosition';
-import { OFFICE_MAP, WALKABLE_TILES, BREAK_ZONE_TILES } from '../components/Office/officeMap';
+import { OFFICE_MAP, WALKABLE_TILES, BREAK_ZONE_TILES, DOOR_TILE, DOOR_ZONE_KEYS } from '../components/Office/officeMap';
 import { GRID_COLS, GRID_ROWS } from '../components/Office/officeTokens';
 
 const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -41,12 +41,17 @@ export function useAvatarMovement(
       broadcastPosition(nc, nr);
 
       const currentStatus = statuses[currentUserId]?.status;
-      if (BREAK_ZONE_TILES.has(tile)) {
-        // Only trigger break zone for active statuses — don't override offline/dnd
+      const inDoorZone = tile === DOOR_TILE || DOOR_ZONE_KEYS.has(`${nr}-${nc}`);
+      if (inDoorZone) {
+        if (currentStatus !== 'dnd' && currentStatus !== 'offline') {
+          updateStatus('offline');
+        }
+      } else if (BREAK_ZONE_TILES.has(tile)) {
         if (currentStatus === 'online') updateStatus('pause');
       } else if (tile === 'C' && nr === mySeatRow && nc === mySeatCol) {
-        // Returned to own desk from a break
-        if (currentStatus === 'pause') updateStatus('online');
+        if (currentStatus === 'pause' || currentStatus === 'offline') {
+          updateStatus('online');
+        }
       }
     };
 

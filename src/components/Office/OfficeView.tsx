@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useUsers } from '../../hooks/useUsers';
 import { useRealtimeStatus } from '../../hooks/useRealtimeStatus';
 import { usePositions } from '../../hooks/usePositions';
 import { useAvatarMovement } from '../../hooks/useAvatarMovement';
 import { useOfficeStore } from '../../stores/officeStore';
-import type { StatusValue } from '../../types';
+import type { StatusValue, User } from '../../types';
 import { TILE, GRID_COLS, GRID_ROWS, SPRITE_RES, C, STATUS_META, DESK_VISUALS, type DesignStatus } from './officeTokens';
 import { OFFICE_MAP } from './officeMap';
 import {
@@ -38,8 +38,9 @@ const SEATS: { row: number; col: number; deskPosition: number }[] = [];
   }
 })();
 
-// Lookup: deskPosition → seat
+// O(1) lookups keyed at module level (OFFICE_MAP is a constant)
 const SEAT_BY_DESK = Object.fromEntries(SEATS.map((s) => [s.deskPosition, s]));
+const SEAT_AT_TILE = Object.fromEntries(SEATS.map((s) => [`${s.row}-${s.col}`, s]));
 
 export function OfficeView() {
   const { loading, error } = useUsers();
@@ -82,22 +83,26 @@ export function OfficeView() {
   const CSSW = GRID_COLS * TILE;
   const CSSH = GRID_ROWS * TILE;
 
-  // Seat data lookup
-  const seatData = Object.fromEntries(
-    SEATS.map(({ deskPosition }) => {
-      const user = Object.values(users).find((u) => u.desk_position === deskPosition);
-      const rawStatus = user ? statuses[user.id]?.status ?? 'offline' : 'offline';
-      const designStatus = toDesign[rawStatus as StatusValue] ?? 'away';
-      return [deskPosition, { user, designStatus }];
-    })
-  );
+  // Memoize per-seat design status — only recomputes when users/statuses change
+  const seatData = useMemo(() => {
+    const userByDesk: Record<number, User> = {};
+    for (const u of Object.values(users)) userByDesk[u.desk_position] = u;
+    return Object.fromEntries(
+      SEATS.map(({ deskPosition }) => {
+        const user = userByDesk[deskPosition];
+        const rawStatus = user ? statuses[user.id]?.status ?? 'offline' : 'offline';
+        const designStatus = toDesign[rawStatus as StatusValue] ?? 'away';
+        return [deskPosition, { user, designStatus }];
+      })
+    );
+  }, [users, statuses]);
 
-  const lampOnCols = new Set(
+  const lampOnCols = useMemo(() => new Set(
     SEATS.filter(({ deskPosition }) => {
       const ds = seatData[deskPosition]?.designStatus;
       return ds === 'active' || ds === 'dnd';
     }).map(({ col }) => col)
-  );
+  ), [seatData]);
 
   // Render static tiles (no avatars — rendered as a separate floating layer below)
   let artCount = 0;
@@ -110,8 +115,8 @@ export function OfficeView() {
       const tx   = c * SPRITE_RES;
       const ty   = r * SPRITE_RES;
 
-      const seat      = SEATS.find((s) => s.row === r && s.col === c);
-      const seatBelow = SEATS.find((s) => s.col === c && s.row === r + 1);
+      const seat      = SEAT_AT_TILE[`${r}-${c}`];
+      const seatBelow = SEAT_AT_TILE[`${r + 1}-${c}`];
 
       let content: React.ReactNode = null;
       switch (code) {

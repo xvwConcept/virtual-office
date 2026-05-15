@@ -4,6 +4,7 @@ import type { Status, StatusValue, User } from '../types';
 export interface ToastEntry {
   id: string;
   userId: string;
+  userName: string;
   from: StatusValue;
   to: StatusValue;
 }
@@ -27,6 +28,7 @@ interface OfficeState {
   setAvatarPos: (pos: { row: number; col: number }) => void;
   setPositions: (positions: { user_id: string; col: number; row: number }[]) => void;
   upsertPosition: (pos: { user_id: string; col: number; row: number }) => void;
+  removePosition: (userId: string) => void;
   setPulsing: (userId: string) => void;
   addToast: (toast: ToastEntry) => void;
   removeToast: (id: string) => void;
@@ -57,6 +59,12 @@ export const useOfficeStore = create<OfficeState>((set) => ({
     set({ positions: Object.fromEntries(list.map((p) => [p.user_id, { col: p.col, row: p.row }])) }),
   upsertPosition: (pos) =>
     set((s) => ({ positions: { ...s.positions, [pos.user_id]: { col: pos.col, row: pos.row } } })),
+  removePosition: (userId) =>
+    set((s) => {
+      const next = { ...s.positions };
+      delete next[userId];
+      return { positions: next };
+    }),
   setPulsing: (userId) => {
     set((s) => ({ pulsingUsers: { ...s.pulsingUsers, [userId]: true } }));
     setTimeout(

@@ -13,19 +13,31 @@ export function useRealtimeStatus() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'statuses' },
         (payload) => {
-          const row = (payload.new ?? payload.old) as Status | undefined;
+          const row = (payload.new && Object.keys(payload.new).length > 0 ? payload.new : null) as Status | null;
           if (!row) return;
 
           const { statuses, users, currentUserId, addToast, setPulsing } =
             useOfficeStore.getState();
 
+          // Skip own changes and skip if not yet authenticated
+          if (!currentUserId || row.user_id === currentUserId) {
+            upsertStatus(row);
+            return;
+          }
+
           const prev = statuses[row.user_id]?.status as StatusValue | undefined;
           const next = row.status as StatusValue;
 
-          if (prev && prev !== next && row.user_id !== currentUserId) {
+          if (prev && prev !== next) {
             const user = users[row.user_id];
             if (user) {
-              addToast({ id: `${row.user_id}-${Date.now()}`, userId: row.user_id, from: prev, to: next });
+              addToast({
+                id: `${row.user_id}-${Date.now()}`,
+                userId: row.user_id,
+                userName: user.name,
+                from: prev,
+                to: next,
+              });
               setPulsing(row.user_id);
             }
           }

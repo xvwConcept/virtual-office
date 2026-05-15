@@ -16,12 +16,6 @@ export interface Status {
   updated_at: string;
 }
 
-export interface Desk {
-  position: number;
-  user: User | null;
-  status: Status | null;
-}
-
 export const STATUS_LABELS: Record<StatusValue, string> = {
   online:  'Am Platz',
   pause:   'Pause',
@@ -37,4 +31,3 @@ export const STATUS_COLORS: Record<StatusValue, string> = {
 };
 
 export const OFFICE_GRID = { cols: 20, rows: 15, tileSize: 32 } as const;
-export const DESK_COUNT = 6;

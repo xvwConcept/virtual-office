@@ -1,5 +1,6 @@
 import { useOfficeStore } from '../../stores/officeStore';
 import { useUpdateStatus } from '../../hooks/useUpdateStatus';
+import { useAuth } from '../../hooks/useAuth';
 import { STATUS_LABELS, STATUS_COLORS, type StatusValue } from '../../types';
 import { C } from '../Office/officeTokens';
 
@@ -11,6 +12,7 @@ export function StatusBar() {
     currentUserId ? s.statuses[currentUserId] : null
   );
   const updateStatus = useUpdateStatus();
+  const { signOut } = useAuth();
 
   if (!currentUserId) return null;
 
@@ -54,6 +56,35 @@ export function StatusBar() {
           </button>
         );
       })}
+
+      <div style={{ width: 1, background: C.wallLight, margin: '4px 4px' }} />
+
+      <button
+        onClick={signOut}
+        title="Abmelden"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 10px',
+          background: 'transparent',
+          border: '1px solid transparent',
+          color: C.inkDim,
+          fontFamily: 'inherit',
+          fontSize: 11,
+          letterSpacing: 1,
+          cursor: 'pointer',
+          outline: 'none',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = C.ink;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = C.wallLight;
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = C.inkDim;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent';
+        }}
+      >
+        ⌐ LOGOUT
+      </button>
     </div>
   );
 }

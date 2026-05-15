@@ -42,8 +42,10 @@ export function useAvatarMovement(
 
       const currentStatus = statuses[currentUserId]?.status;
       if (BREAK_ZONE_TILES.has(tile)) {
-        if (currentStatus !== 'pause') updateStatus('pause');
+        // Only trigger break zone for active statuses — don't override offline/dnd
+        if (currentStatus === 'online') updateStatus('pause');
       } else if (tile === 'C' && nr === mySeatRow && nc === mySeatCol) {
+        // Returned to own desk from a break
         if (currentStatus === 'pause') updateStatus('online');
       }
     };

@@ -34,23 +34,7 @@ export function OfficeView() {
   const avatarPos      = useOfficeStore((s) => s.avatarPos);
   const setAvatarPos   = useOfficeStore((s) => s.setAvatarPos);
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: C.ink, fontFamily: 'ui-monospace, monospace' }}>
-      Lade Büro …
-    </div>
-  );
-  if (error) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: '#ef476f', fontFamily: 'ui-monospace, monospace' }}>
-      Fehler: {error}
-    </div>
-  );
-
-  const W    = GRID_COLS * SPRITE_RES;  // 320 logical px
-  const H    = GRID_ROWS * SPRITE_RES;  // 240 logical px
-  const CSSW = GRID_COLS * TILE;        // 960 css px
-  const CSSH = GRID_ROWS * TILE;        // 720 css px
-
-  // Collect seat positions in row-major order, assign desk_position 1…6
+  // Seat positions are derived from a constant map — safe to compute before early returns.
   let seatIdx = 0;
   const seats: { row: number; col: number; deskPosition: number }[] = [];
   for (let r = 0; r < GRID_ROWS; r++) {
@@ -65,7 +49,7 @@ export function OfficeView() {
   const currentUser = currentUserId ? users[currentUserId] : null;
   const mySeat = seats.find((s) => s.deskPosition === currentUser?.desk_position) ?? null;
 
-  // Place avatar at own desk on first load
+  // All hooks must run before any early return (Rules of Hooks).
   useEffect(() => {
     if (mySeat && !avatarPos) {
       setAvatarPos({ row: mySeat.row, col: mySeat.col });
@@ -73,6 +57,22 @@ export function OfficeView() {
   }, [mySeat?.row, mySeat?.col, avatarPos, setAvatarPos]);
 
   useAvatarMovement(mySeat?.row ?? null, mySeat?.col ?? null);
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: C.ink, fontFamily: 'ui-monospace, monospace' }}>
+      Lade Büro …
+    </div>
+  );
+  if (error) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: C.bgDeep, color: '#ef476f', fontFamily: 'ui-monospace, monospace' }}>
+      Fehler: {error}
+    </div>
+  );
+
+  const W    = GRID_COLS * SPRITE_RES;
+  const H    = GRID_ROWS * SPRITE_RES;
+  const CSSW = GRID_COLS * TILE;
+  const CSSH = GRID_ROWS * TILE;
 
   // Build lookup: deskPosition → { name, designStatus }
   const seatData = Object.fromEntries(

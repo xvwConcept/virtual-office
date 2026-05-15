@@ -19,9 +19,22 @@ create table if not exists public.statuses (
 
 create index if not exists statuses_user_id_idx on public.statuses(user_id);
 
--- Realtime aktivieren
-alter publication supabase_realtime add table public.statuses;
-alter publication supabase_realtime add table public.users;
+-- Realtime aktivieren (idempotent)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'statuses'
+  ) then
+    alter publication supabase_realtime add table public.statuses;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'users'
+  ) then
+    alter publication supabase_realtime add table public.users;
+  end if;
+end $$;
 
 -- RLS
 alter table public.users enable row level security;

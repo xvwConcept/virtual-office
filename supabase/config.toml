@@ -1,0 +1,7 @@
+# Supabase project config — used by the Supabase CLI and the GitHub integration.
+# Docs: https://supabase.com/docs/guides/local-development/cli/config
+
+project_id = "qobmsadoufrtlkuvxtsn"
+
+[db]
+major_version = 15

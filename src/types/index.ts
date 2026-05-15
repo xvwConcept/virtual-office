@@ -23,18 +23,18 @@ export interface Desk {
 }
 
 export const STATUS_LABELS: Record<StatusValue, string> = {
-  online: 'Am Platz',
-  pause: 'Pause',
-  dnd: 'Nicht stören',
+  online:  'Am Platz',
+  pause:   'Pause',
+  dnd:     'Nicht stören',
   offline: 'Abwesend',
 };
 
 export const STATUS_COLORS: Record<StatusValue, string> = {
-  online: '#64ffda',
-  pause: '#ffd166',
-  dnd: '#ef476f',
-  offline: '#666666',
+  online:  '#5cbf60',
+  pause:   '#e8a44c',
+  dnd:     '#d84a4a',
+  offline: '#8a8590',
 };
 
 export const OFFICE_GRID = { cols: 20, rows: 15, tileSize: 32 } as const;
-export const DESK_COUNT = 7;
+export const DESK_COUNT = 6;

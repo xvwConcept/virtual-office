@@ -1,6 +1,7 @@
 import { useOfficeStore } from '../../stores/officeStore';
 import { useUpdateStatus } from '../../hooks/useUpdateStatus';
 import { STATUS_LABELS, STATUS_COLORS, type StatusValue } from '../../types';
+import { C } from '../Office/officeTokens';
 
 const STATUSES: StatusValue[] = ['online', 'pause', 'dnd', 'offline'];
 
@@ -14,26 +15,45 @@ export function StatusBar() {
   if (!currentUserId) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 flex -translate-x-1/2 gap-2 rounded-lg border border-white/10 bg-[var(--color-card)] p-2 shadow-xl">
-      {STATUSES.map((s) => (
-        <button
-          key={s}
-          onClick={() => updateStatus(s)}
-          className="flex items-center gap-2 rounded px-3 py-1 text-sm hover:bg-white/10"
-          style={{
-            outline:
-              current?.status === s
-                ? `2px solid ${STATUS_COLORS[s]}`
-                : 'none',
-          }}
-        >
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ backgroundColor: STATUS_COLORS[s] }}
-          />
-          {STATUS_LABELS[s]}
-        </button>
-      ))}
+    <div style={{
+      position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+      display: 'flex', gap: 4,
+      background: C.bgFrame,
+      border: `1px solid ${C.wallLight}`,
+      boxShadow: `0 4px 0 ${C.bgDeep}`,
+      padding: '6px 8px',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      zIndex: 100,
+    }}>
+      {STATUSES.map((s) => {
+        const isActive = current?.status === s;
+        const color = STATUS_COLORS[s];
+        return (
+          <button
+            key={s}
+            onClick={() => updateStatus(s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '6px 12px',
+              background: isActive ? color + '22' : 'transparent',
+              border: isActive ? `1px solid ${color}55` : '1px solid transparent',
+              color: C.ink,
+              fontFamily: 'inherit',
+              fontSize: 11,
+              letterSpacing: 1,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <span style={{
+              width: 8, height: 8, background: color,
+              boxShadow: isActive ? `0 0 8px ${color}` : 'none',
+              display: 'block',
+            }} />
+            {STATUS_LABELS[s].toUpperCase()}
+          </button>
+        );
+      })}
     </div>
   );
 }

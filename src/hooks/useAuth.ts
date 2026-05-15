@@ -21,8 +21,8 @@ export function useAuth() {
     };
   }, [setCurrentUserId]);
 
-  const signInWithMagicLink = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ email });
+  const signInWithPassword = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
   };
 
@@ -30,5 +30,5 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
-  return { ready, signInWithMagicLink, signOut };
+  return { ready, signInWithPassword, signOut };
 }

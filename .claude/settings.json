@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"Model reminder — Haiku: renaming/boilerplate | Sonnet: code/research (default) | Opus: architecture/tradeoffs. Switch with /model <name>.\"}'",
+            "statusMessage": "Loading model reminder..."
+          }
+        ]
+      }
+    ]
+  }
+}
